@@ -1,4 +1,5 @@
-##Adapted from Eva's code; start in a directory containing fastq files for all samples
+##Step 1 of snakemake pipeline for Tarapoto samples (which start as fastq files)
+## start in a directory containing fastq files for all samples
 ##Can adapt to any genus; change reference directory and config file
 ##concatgvcf allows for 7 text files for partitioning scaffolds/chromosomes, can edit as needed
 

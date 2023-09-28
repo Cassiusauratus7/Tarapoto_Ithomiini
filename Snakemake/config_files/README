@@ -1,0 +1,4 @@
+Example config files for snakemake pipeline (using Brevioleria samples)
+config.Brevioleria.yml: step 1 (fastq to gvcf) for Tarapoto samples
+config.Brevioleria.ecuador.yml: step 1 (cram to gvcf) for Ecuadorian samples
+config.Brevioleria.2.yml: step 2 (gvcf to filtered vcf), combining both Tarapoto and Ecuador samples

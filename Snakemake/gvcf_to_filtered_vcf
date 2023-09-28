@@ -1,0 +1,38 @@
+## GVCF to filtered VCF, copy gvcf directory from previous step to working directory
+## Edit: Path to config file, genus in file names, path to reference
+
+configfile: "${PATH_TO_CONFIG_FILE_2.YML}"
+
+rule all:
+    input: expand("filtered/${GENUS}.rmINDEL.minDP3.maxDP70.minmeanDP5.maxmeanDP35.maxmissing03.{tig}.vcf.gz", tig=config["contig"])        
+rule combineGVCF:
+    input:
+        ref="${PATH_TO_REFERENCE}"
+    params:
+        gvcf=config["listgvcf"],
+        interval=lambda wildcards: config["contig"][wildcards.tig]
+    output:
+        combgvcf="comb.gvcf/all_${GENUS}.{tig}.g.vcf.gz",
+        tbi="comb.gvcf/all_${GENUS}.{tig}.g.vcf.gz.tbi"
+    shell:
+        "gatk CombineGVCFs -R {input.ref} -V {params.gvcf} -O {output.combgvcf} -L {params.interval}"
+
+# Turns the combined GVCF-file into a VCF-file
+rule genotypeGVCF:
+    input:
+        combgvcf="comb.gvcf/all_${GENUS}.{tig}.g.vcf.gz",
+        ref="${PATH_TO_REFERENCE}"
+    output:
+        vcf="vcf/${GENUS}.{tig}.vcf.gz",
+        tbi="vcf/${GENUS}.{tig}.vcf.gz.tbi"
+    shell:
+        "gatk GenotypeGVCFs -R {input.ref} -V {input.combgvcf} -O {output.vcf} -all-sites"
+
+#filter
+rule filterVCF:
+    input:
+        vcf="vcf/${GENUS}.{tig}.vcf.gz",
+    output:
+        filter="filtered/${GENUS}.rmINDEL.minDP3.maxDP70.minmeanDP5.maxmeanDP35.maxmissing03.{tig}.vcf.gz"
+    shell:
+        "bcftools view -O z -o {output.filter} -i 'INFO/DP < 35 || INFO/DP > 5 || FORMAT/DP > 3 || FORMAT/DP < 70 || F_MISSING<0.3' -V indels {input.vcf}"

@@ -1,0 +1,115 @@
+##Adapted from Eva's code; start in a directory containing fastq files for all samples
+##Can adapt to any genus; change reference directory and config file
+##concatgvcf allows for 7 text files for partitioning scaffolds/chromosomes, can edit as needed
+
+configfile: "${PATH_TO_CONFIG.YML}"
+
+rule all:
+    input: expand("gvcf/{sample}.g.vcf.gz", sample=config["forward"])
+
+# Remove (parts of) Nextera adapter sequences, polyG tails created by lack of Illumina signal,
+# Also removes reads with more than 5 Ns and reads with more than 40% with quality under 15
+rule fastp:
+    input:
+        f=lambda wildcards: config["forward"][wildcards.sample],
+        r=lambda wildcards: config["reverse"][wildcards.sample]
+    output:
+        f="noAdapt/{sample}.1.fq.gz",
+        r="noAdapt/{sample}.2.fq.gz",
+        html="{sample}.fastp.html"
+    shell:
+        "fastp --in1 {input.f} --in2 {input.r} --out1 {output.f} --out2 {output.r} -l 50 -w 4 -h {output.html}"
+#temp directory
+rule make_temp_dir:
+    output:
+       temp(expand("tmp/{sample}/{sample}.txt", sample=config["forward"]))
+    shell:
+       "touch {output}"
+
+
+# Map the reads to the reference genome (SM=individual, lane not indicated)
+rule bwa_map:
+    input:
+        fa="${PATH_TO_REFERENCE_GENOME}",     
+        fq1="noAdapt/{sample}.1.fq.gz",
+        fq2="noAdapt/{sample}.2.fq.gz",
+        tmpfile=ancient("tmp/{sample}/{sample}.txt")
+    output:
+        bam="bam/{sample}.bam"
+    log:
+        "logs/{sample}.bwa.log"
+    params:
+        rg1="@RG\\tPL:Illumina\\tSM:",
+        rg2="\\tID:",
+        tmpdir="tmp/{sample}/{sample}"
+    threads: 8
+    shell:
+        "(bwa mem -M -R '{params.rg1}{wildcards.sample}{params.rg2}{wildcards.sample}' "
+        "-t {threads} {input.fa} {input.fq1} {input.fq2} | samtools sort -T {params.tmpdir} -m 2G- > {output.bam}) 2> {log}"
+#index bam files
+rule index:
+    input:
+        "bam/{sample}.bam"
+    output:
+        "bam/{sample}.bam.bai"
+    shell:
+        "samtools index {input}"
+#remove duplicates with picard
+rule remove_duplicates:
+    input:
+        bam="bam/{sample}.bam",
+        bai="bam/{sample}.bam.bai"
+    output:
+        bam="rmdbam/{sample}.bam",
+        metrics="rmdbam/{sample}.bam.metrics"
+    shell:
+        "java -jar /lustre/scratch125/tol/teams/meier/bin/packages/picard.jar MarkDuplicates \
+        REMOVE_DUPLICATES=true ASSUME_SORTED=true VALIDATION_STRINGENCY=SILENT MAX_FILE_HANDLES_FOR_READ_ENDS_MAP=1000 \
+        INPUT={input.bam} \
+        OUTPUT={output.bam} \
+        METRICS_FILE={output.metrics}"
+#index deduplicated files
+rule index_rmd:
+    input:
+        "rmdbam/{sample}.bam"
+    output:
+        "rmdbam/{sample}.bam.bai"
+    shell:
+        "samtools index {input}"
+
+#samtools stats
+rule stats:
+    input:
+        "rmdbam/{sample}.bam"
+    output:
+        stats="rmdbam/{sample}.stats",
+        flagstat="rmdbam/{sample}.flagstat"
+    shell:
+        "samtools stats {input} > {output.stats}; "
+        "samtools flagstat {input} > {output.flagstat}"
+#run HaplotypeCaller
+#should need interval files with scaffolds but we can figure that out later
+rule haplotypecaller:
+    input:
+        bam="rmdbam/{sample}.bam",
+        bai="rmdbam/{sample}.bam.bai",
+        ref="${PATH_TO_REFERENCE_GENOME}",
+        stats=ancient("rmdbam/{sample}.stats") ##wait for bam stats to finish, ancient ignores time stamp
+    output:
+        gvcf=("gvcf/{sample}.{sub}.gvcf.gz"),
+        tbi=("gvcf/{sample}.{sub}.gvcf.gz.tbi")
+    log:
+        "logs/{sample}.{sub}.gvcf.log"
+    shell:
+        "(gatk --java-options '-Xmx50G -Xms10G' HaplotypeCaller -R {input.ref} -I {input.bam} -O {output.gvcf} -ERC BP_RESOLUTION --native-pair-hmm-threads 10 -L scaffolds.{wildcards.sub}.intervals) 2> {log}"
+# Combine the gvcf files into a single file per individual
+rule concatgvcf:
+    input:
+        expand("gvcf/{{sample}}.{sub}.gvcf.gz", sub=[0, 1, 2, 3, 4, 5, 6]) # {{sample}} prevents expansion
+    params:
+        "gvcf/{sample}"
+    output:
+        protected("gvcf/{sample}.g.vcf.gz"),
+        "gvcf/{sample}.g.vcf.gz.tbi"
+    shell:
+        "${PATH_TO_CONCATGVCF.SH} {params}"

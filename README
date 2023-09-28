@@ -1,0 +1,8 @@
+LSF scripts use in popgen analysis
+
+##SNAKEMAKE
+Contains scripts for snakemake pipelines
+
+##GENOME SCANS
+Utilises Simon Martin's scripts (found at https://github.com/simonhmartin/genomics_general)
+

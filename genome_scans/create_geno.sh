@@ -1,4 +1,5 @@
 ####!/bin/bash
+##convert vcf.gz files to geno.gz files
 
 #BSUB -J parseVCF[1-19]
 #BSUB -o logs/parseVCF_%J.o

@@ -1,2 +1,3 @@
 Requires Simon Martin's scripts, found at https://github.com/simonhmartin/genomics_general. My scripts assume that they've been installed in /software/team347/${USERNAME}
 These scripts use Brevioleria and Napeogenes sample IDs as examples, change the sample names as needed
+Requires numpy, which can be installed via conda

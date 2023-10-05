@@ -1,3 +1,5 @@
 Requires Simon Martin's scripts, found at https://github.com/simonhmartin/genomics_general. My scripts assume that they've been installed in /software/team347/${USERNAME}
 These scripts use Brevioleria and Napeogenes sample IDs as examples, change the sample names as needed
-Requires numpy, which can be installed via conda
+Requires numpy, which can be installed via conda. Remember to conda activate numpy before running
+These are submitted as job arrays, (e.g. ABBA[1-19]), make sure the number of jobs corresponds to the number of files processed
+
